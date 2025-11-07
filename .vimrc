@@ -10,7 +10,7 @@ let mapleader = ","
 set mouse=a
 
 "highlight trailing whitespace
-match ErrorMsg '\s\+$'
+"match ErrorMsg '\s\+$'
 
 "clipboard
 set clipboard=unnamedplus
@@ -82,6 +82,11 @@ Plug 'mg979/vim-visual-multi'
 "vim comments
 Plug 'tpope/vim-commentary'
 
+"Linter
+Plug 'dense-analysis/ale'
+
+"debugger integration
+Plug 'puremourning/vimspector'
 
 call plug#end()
 
@@ -126,7 +131,7 @@ nnoremap <leader>t :tabnew<CR>
 nnoremap <leader>/ : Commentary<CR>
 vnoremap <leader>/ : Commentary<CR>
 
-
-
-
-
+"linter
+let g:ale_linters = { 'cpp': ['clangd', 'gcc'] }
+let g:ale_fixers = { 'cpp': ['clang-format'] }
+let g:ale_fix_on_save = 1
