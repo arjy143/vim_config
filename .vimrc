@@ -2,6 +2,14 @@
 
 "init stuff
 set nocompatible
+
+"use this repo's .vim directory for plugins (plug.vim, plugged/, pack/).
+"~/.vimrc is a symlink into the repo, so resolve it to find the real location;
+"that way nothing else needs linking and the repo can live anywhere.
+let s:vimdir = fnamemodify(resolve(expand('<sfile>:p')), ':h') . '/.vim'
+let &runtimepath = s:vimdir . ',' . &runtimepath . ',' . s:vimdir . '/after'
+let &packpath = s:vimdir . ',' . &packpath
+
 filetype plugin indent on
 syntax on
 
@@ -82,7 +90,8 @@ nnoremap <silent> <leader>? :call <SID>OpenCheatsheet()<CR>
 let g:ale_completion_enabled = 1
 let g:ale_completion_autoimport = 1
 
-call plug#begin('~/.vim/plugged')
+"plugins are installed into <repo>/.vim/plugged (git-ignored; run :PlugInstall)
+call plug#begin(s:vimdir . '/plugged')
 
 "status line
 Plug 'itchyny/lightline.vim'
@@ -92,7 +101,8 @@ Plug 'preservim/nerdtree'
 Plug 'Xuyuanp/nerdtree-git-plugin'
 
 "fuzzy finding
-Plug 'junegunn/fzf'
+"(the hook downloads the fzf binary into the plugin dir, so no system fzf is needed)
+Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
 
 "git
@@ -230,6 +240,8 @@ let g:gutentags_cache_dir = expand('~/.cache/vim/gutentags')
 let g:gutentags_project_root = ['.git', 'CMakeLists.txt', 'Makefile', 'package.json']
 "use the ctags backend only
 let g:gutentags_modules = ['ctags']
+"stay quiet (instead of erroring on the first file opened) until ctags is installed
+let g:gutentags_enabled = executable('ctags')
 "don't index build artefacts / vendored code
 let g:gutentags_ctags_exclude = ['build', '.git', 'node_modules', '*.min.js', 'tags']
 ":GutentagsToggleEnabled turns background generation on/off if you ever need to
