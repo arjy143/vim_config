@@ -15,7 +15,10 @@ project(${project_name} LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_executable(${project_name} src/main.cpp)
+# Every .cpp under src/ is compiled; CONFIGURE_DEPENDS picks up new files on the next build.
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
+add_executable(${project_name} \${SOURCES})
+target_include_directories(${project_name} PRIVATE include)
 target_compile_options(${project_name} PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion)
 
 # Debug builds: catch memory errors and undefined behaviour at runtime.
@@ -36,21 +39,31 @@ int main(int argc, char* argv[]) {
 }"
 
 BUILD_CONTENT='#!/usr/bin/env bash
+# Usage: ./build.sh [debug|release]   (default: debug)
 set -e
-cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-cmake --build build -j "$(nproc)"'
+cd "$(dirname "$0")"
+type=${1:-debug}
+cmake -B "build/$type" -DCMAKE_BUILD_TYPE="${type^}" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+cmake --build "build/$type" -j "$(nproc)"
+ln -sf "build/$type/compile_commands.json" .   # for clangd'
 
 RUN_CONTENT="#!/usr/bin/env bash
+# Usage: ./run.sh [--release] [program args...]
 set -e
-./build.sh
-./build/${project_name} \"\$@\""
+cd \"\$(dirname \"\$0\")\"
+type=debug
+if [[ \${1:-} == --release ]]; then type=release; shift; fi
+./build.sh \$type
+./build/\$type/${project_name} \"\$@\""
 
 DEBUG_CONTENT="#!/usr/bin/env bash
+# Usage: ./debug.sh [program args...]
 set -e
-./build.sh
+cd \"\$(dirname \"\$0\")\"
+./build.sh debug
 # LeakSanitizer can't run under gdb; abort_on_error makes gdb stop on sanitizer errors.
 export ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 UBSAN_OPTIONS=abort_on_error=1
-gdb -q -ex run --args ./build/${project_name} \"\$@\""
+gdb -q -ex run --args ./build/debug/${project_name} \"\$@\""
 
 GITIGNORE_CONTENT="# build output
 build/
@@ -84,7 +97,7 @@ write_file() {
     fi
 }
 
-mkdir -p src
+mkdir -p src include
 write_file CMakeLists.txt "$CMAKELISTS_CONTENT"
 write_file src/main.cpp "$MAINCPP_CONTENT"
 write_file build.sh "$BUILD_CONTENT"
