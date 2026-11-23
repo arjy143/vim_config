@@ -1,5 +1,3 @@
-
-
 "init stuff
 set nocompatible
 
@@ -16,8 +14,9 @@ syntax on
 "no swap files (undo extension is good enough)
 set noswapfile
 
-"leader key
-let mapleader = ","
+"leader key: space. (Nop stops a lone space from also moving the cursor.)
+let mapleader = " "
+nnoremap <Space> <Nop>
 
 "mouse
 set mouse=a
@@ -25,20 +24,18 @@ set mouse=a
 "highlight trailing whitespace
 "match ErrorMsg '\s\+$'
 
-"clipboard: this Vim is built with -clipboard, so unnamedplus does nothing here.
-"System clipboard is handled by the vim-wsl-copy-paste plugin (cy / visual Y).
-
 "code folding
 set foldmethod=marker
 
 "setting a nice colour scheme
-colorscheme koehler 
+colorscheme koehler
 " if has("termguicolors")
 "     set termguicolors
 " endif
 
-"set line numbers
+"line numbers: absolute on the current line, relative everywhere else
 set number
+set relativenumber
 
 "set the current line to be highlighted
 set cursorline
@@ -68,9 +65,6 @@ if has('persistent_undo')
 	set undofile
 endif
 
-"ctags (need to have ctags installed: apt install exuberant-ctags)
-set tags=./tags;,tags;
-
 "open the cheatsheet from anywhere with <leader>? (read-only, in a new tab).
 "path is derived from this vimrc's real location, so it survives moving the repo.
 let s:cheatsheet = fnamemodify(resolve(expand('<sfile>:p')), ':h') . '/CHEATSHEET.md'
@@ -84,6 +78,51 @@ function! s:OpenCheatsheet() abort
 endfunction
 nnoremap <silent> <leader>? :call <SID>OpenCheatsheet()<CR>
 
+"--------------------------------WINDOWS & TABS-------------------------------
+"move between panes with ctrl + h/j/k/l
+nnoremap <C-h> <C-w>h
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-l> <C-w>l
+
+"tabs: F9 / F10 = previous / next, <leader>t = new tab
+nnoremap <silent> <F9> :tabprevious<CR>
+nnoremap <silent> <F10> :tabnext<CR>
+inoremap <silent> <F9> <Esc>:tabprevious<CR>
+inoremap <silent> <F10> <Esc>:tabnext<CR>
+nnoremap <silent> <leader>t :tabnew<CR>
+
+"<leader>z: zoom the current pane to full screen, press again to restore.
+"(zooming opens the pane in its own tab; un-zooming closes that tab and goes
+"back to the original one.)
+function! s:ZoomToggle() abort
+	if exists('t:zoom_origin')
+		let l:origin = t:zoom_origin
+		tabclose
+		execute 'tabnext ' . l:origin
+	elseif winnr('$') > 1
+		let l:origin = tabpagenr()
+		tab split
+		let t:zoom_origin = l:origin
+	endif
+endfunction
+nnoremap <silent> <leader>z :call <SID>ZoomToggle()<CR>
+
+"--------------------------------FILE TREE (netrw, built in)-------------------------------
+"ctrl + t toggles a file tree on the left. Inside it: <CR> open, - parent dir,
+"% new file, d new dir, D delete, R rename, gh toggle hidden files.
+let g:netrw_banner = 0          "hide the help banner (press I to show it)
+let g:netrw_liststyle = 3       "tree view
+let g:netrw_winsize = 20        "width, in percent
+let g:netrw_browse_split = 4    "open files in the window you came from
+nnoremap <silent> <C-t> :Lexplore<CR>
+"netrw uses ctrl + l for refresh; make it move to the pane on the right instead,
+"like everywhere else (toggle the tree with ctrl + t twice to refresh it).
+augroup NetrwMaps
+	autocmd!
+	autocmd FileType netrw nnoremap <buffer> <C-l> <C-w>l
+augroup END
+
 "--------------------------------PLUGINS-------------------------------
 "ALE: these must be set before ALE loads (full config is further below).
 "Turn on LSP-driven autocompletion and auto-import.
@@ -95,10 +134,6 @@ call plug#begin(s:vimdir . '/plugged')
 
 "status line
 Plug 'itchyny/lightline.vim'
-
-"file tree
-Plug 'preservim/nerdtree'
-Plug 'Xuyuanp/nerdtree-git-plugin'
 
 "fuzzy finding
 "(the hook downloads the fzf binary into the plugin dir, so no system fzf is needed)
@@ -132,17 +167,13 @@ Plug 'tpope/vim-eunuch'
 "visualise the persistent undo tree
 Plug 'mbbill/undotree'
 
-"auto-(re)generate the ctags 'tags' file in the background
-Plug 'ludovicchabant/vim-gutentags'
-
 "Linter / LSP client
 Plug 'dense-analysis/ale'
 
-"debugger integration
-Plug 'puremourning/vimspector'
-
-"wsl copy paste
-Plug 'Konfekt/vim-wsl-copy-paste'
+"copy/paste to the Windows clipboard (only useful, and only loaded, under WSL)
+if has('wsl')
+	Plug 'Konfekt/vim-wsl-copy-paste'
+endif
 
 "markdown in-editor rendering (pure vimscript, no external deps)
 "(tabular is an optional helper for :TableFormat alignment)
@@ -152,104 +183,55 @@ call plug#end()
 
 
 "--------------------------------PLUGIN CONFIGS-------------------------------
-"mappings for some of the plugins
 
-"status line (lightline)
-"show 'TAGS...' in the statusline while gutentags is generating tags in the
-"background; the component is empty (invisible) when nothing is happening.
-function! LightlineGutentags() abort
-	return exists('*gutentags#statusline') ? gutentags#statusline('', '', 'TAGS...') : ''
+"status line (lightline): default layout, no configuration needed
+
+"fuzzy finder (fzf)
+"<leader>f  find a file and open it here
+"<leader>g  ... in a new tab
+"<leader>v  ... in a vertical split
+"<leader>s  ... in a horizontal split
+"<leader>b  switch between open buffers
+"<leader>/  search the contents of every file in the project (ripgrep)
+function! s:FzfFiles(open_cmd) abort
+	call fzf#vim#files('', fzf#vim#with_preview({'sink': a:open_cmd}))
 endfunction
-let g:lightline = {
-\   'active': {
-\     'left':  [ [ 'mode', 'paste' ],
-\                [ 'readonly', 'filename', 'modified' ] ],
-\     'right': [ [ 'lineinfo' ],
-\                [ 'percent' ],
-\                [ 'fileformat', 'fileencoding', 'filetype' ],
-\                [ 'gutentags' ] ],
-\   },
-\   'component_function': {
-\     'gutentags': 'LightlineGutentags',
-\   },
-\ }
-"lightline already initialised (at plug#end) before g:lightline was set above,
-"so re-init now to pick up our layout.
-if exists('*lightline#init')
-	call lightline#init()
-	call lightline#colorscheme()
-	call lightline#update()
-endif
-"redraw the statusline when gutentags starts/finishes so the indicator toggles
-augroup LightlineGutentags
-	autocmd!
-	autocmd User GutentagsUpdating call lightline#update()
-	autocmd User GutentagsUpdated  call lightline#update()
-augroup END
-
-"file tree
-"(control n) toggles the panel on the left
-"(shift i) shows hidden files
-nnoremap <C-n> :NERDTreeToggle<CR>
-
-"below will automatically open file tree with every new vim opening
-"autocmd VimEnter * NERDTree | wincmd p
-
-"fuzzy finder
-"(C f) brings it up
-nnoremap <C-f> :Files<CR>
-nnoremap <C-g> :Rg<CR>
+nnoremap <silent> <leader>f :Files<CR>
+nnoremap <silent> <leader>g :call <SID>FzfFiles('tabedit')<CR>
+nnoremap <silent> <leader>v :call <SID>FzfFiles('vsplit')<CR>
+nnoremap <silent> <leader>s :call <SID>FzfFiles('split')<CR>
+nnoremap <silent> <leader>b :Buffers<CR>
+nnoremap <silent> <leader>/ :Rg<CR>
 
 "git
-nnoremap <leader>gs :Git status<CR>
-nnoremap <leader>gd :Gdiffsplit<CR>
-nnoremap <leader>ga :Gwrite<CR>
-nnoremap <leader>gc :Git commit<CR>
-nnoremap <leader>gp :Git push<CR>
-nnoremap <leader>gl :Git log --oneline<CR>
+"<leader>G opens the fugitive status window (s stage, u unstage, = diff, cc commit).
+"gitgutter's own defaults: ]c / [c next/previous change, <leader>hp preview hunk,
+"<leader>hs stage hunk, <leader>hu undo hunk.
+nnoremap <silent> <leader>G :Git<CR>
 
-
-"vim visual multi
+"multiple cursors (vim-visual-multi defaults, like vscode):
+"ctrl + n select word / add next match, ctrl + down/up add a cursor below/above,
+"<leader>a select every match of the word under the cursor.
 let g:VM_maps = {}
-let g:VM_maps['Find Under']             = '<leader>n'
-let g:VM_maps['Find Subword Under']     = '<leader>n'
-let g:VM_maps['Select All']             = '<leader>a'
-let g:VM_maps['Add Cursor Down']        = '<leader>j'
-let g:VM_maps['Add Cursor Up']          = '<leader>k'
-let g:VM_maps['Exit']                   = '<leader>q'
+let g:VM_maps['Select All'] = '<leader>a'
 
-"working with tabs
-nnoremap <leader>[ :tabprevious<CR>
-nnoremap <leader>] :tabnext<CR>
-nnoremap <leader>t :tabnew<CR>
+"comments: ctrl + / toggles the current line, or the selection.
+"(most terminals send ctrl + / as ctrl + _, so map both.)
+nmap <C-_> <Plug>CommentaryLine
+xmap <C-_> <Plug>Commentary
+nmap <C-/> <Plug>CommentaryLine
+xmap <C-/> <Plug>Commentary
 
-"comments
-nnoremap <leader>/ : Commentary<CR>
-vnoremap <leader>/ : Commentary<CR>
-
-"tier 1 essentials
 "undotree: toggle the undo-history panel (focuses it so you can navigate)
-nnoremap <leader>u :UndotreeToggle<CR>:UndotreeFocus<CR>
+nnoremap <silent> <leader>u :UndotreeToggle<CR>:UndotreeFocus<CR>
 "(surround / repeat / unimpaired / abolish / eunuch work out of the box)
-
-"gutentags: keep the ctags 'tags' file generated/updated automatically.
-"store generated tag files in a cache dir so they never clutter your projects
-"(gutentags adds this file to 'tags' itself, alongside the ./tags;,tags; above).
-let g:gutentags_cache_dir = expand('~/.cache/vim/gutentags')
-"only run inside a real project, identified by one of these root markers
-let g:gutentags_project_root = ['.git', 'CMakeLists.txt', 'Makefile', 'package.json']
-"use the ctags backend only
-let g:gutentags_modules = ['ctags']
-"stay quiet (instead of erroring on the first file opened) until ctags is installed
-let g:gutentags_enabled = executable('ctags')
-"don't index build artefacts / vendored code
-let g:gutentags_ctags_exclude = ['build', '.git', 'node_modules', '*.min.js', 'tags']
-":GutentagsToggleEnabled turns background generation on/off if you ever need to
 
 "wsl copy paste: the plugin provides `cy` (operator) and `Y` (visual) to copy
 "to the Windows clipboard, and `cp` to paste. No custom mapping needed.
 
-"markdown
+"markdown (markdown buffers only)
+"<leader>m  toggle a rendered preview (glow) in a split on the right
+"<leader>M  toggle inline rendering of the markup in the file itself
 "conceal raw markup so **bold**, _italics_, [links](url) etc. render inline.
 "markup on the line under the cursor stays visible so editing is easy.
 let g:vim_markdown_conceal = 1
@@ -264,14 +246,11 @@ function! s:ToggleMarkdownConceal() abort
 	let &l:conceallevel = &conceallevel == 0 ? 2 : 0
 	echo "conceallevel=" . &conceallevel
 endfunction
-autocmd FileType markdown nnoremap <buffer> <silent> <leader>mc :call <SID>ToggleMarkdownConceal()<CR>
 "(provided by vim-markdown when concealment is on)
 " :Toc        - open a table of contents in a split
 " :TableFormat - align the current markdown table (uses tabular)
 
 "--- side-by-side rendered preview (glow in a terminal split) ---
-",mp  open/refresh a rendered view of the current file in a right-hand split
-",mq  close the preview
 "the preview also auto-refreshes whenever you save the markdown file.
 let s:md_preview_buf = -1
 
@@ -289,7 +268,7 @@ function! s:MdRenderInNewSplit(file) abort
 	"the new buffer is empty/unmodified, so ++curwin is safe here
 	execute 'terminal ++curwin ++noclose glow ' . fnameescape(a:file)
 	let s:md_preview_buf = bufnr('%')
-	setlocal nonumber nocursorline nobuflisted nospell
+	setlocal nonumber norelativenumber nocursorline nobuflisted nospell
 endfunction
 
 "close the preview window/buffer if it exists
@@ -315,13 +294,16 @@ function! s:MdPreviewShow() abort
 	call win_gotoid(l:srcwin)
 endfunction
 
-"entry point for ,mp : save, show the preview, and keep it fresh on save
+"save, show the preview, and keep it fresh on save
 function! s:MdPreviewOpen() abort
 	if &filetype !=# 'markdown'
 		echohl WarningMsg | echo 'Not a markdown buffer' | echohl None | return
 	endif
 	if empty(expand('%'))
 		echohl WarningMsg | echo 'Save the file first' | echohl None | return
+	endif
+	if !executable('glow')
+		echohl WarningMsg | echo 'glow is not installed (apt install glow)' | echohl None | return
 	endif
 	silent update
 	call s:MdPreviewShow()
@@ -331,11 +313,26 @@ function! s:MdPreviewOpen() abort
 	augroup END
 endfunction
 
-autocmd FileType markdown nnoremap <buffer> <silent> <leader>mp :call <SID>MdPreviewOpen()<CR>
-autocmd FileType markdown nnoremap <buffer> <silent> <leader>mq :call <SID>MdPreviewClose()<CR>
+"entry point for <leader>m: open the preview, or close it if it's already open
+function! s:MdPreviewToggle() abort
+	if s:MdPreviewWinId() != -1
+		call s:MdPreviewClose()
+		augroup MdPreviewRefresh
+			autocmd! * <buffer>
+		augroup END
+	else
+		call s:MdPreviewOpen()
+	endif
+endfunction
+
+augroup MarkdownMaps
+	autocmd!
+	autocmd FileType markdown nnoremap <buffer> <silent> <leader>m :call <SID>MdPreviewToggle()<CR>
+	autocmd FileType markdown nnoremap <buffer> <silent> <leader>M :call <SID>ToggleMarkdownConceal()<CR>
+augroup END
+
 "--------------------------------ALE (linter + LSP client)-------------------------------
 "clangd is the C/C++ language server: diagnostics, completion, go-to-def, hover.
-"(install per language: clangd=installed; clang-format / pyright not yet present.)
 let g:ale_linters = {
 \   'c':   ['clangd'],
 \   'cpp': ['clangd'],
@@ -362,7 +359,7 @@ autocmd FileType c,cpp setlocal omnifunc=ale#completion#OmniFunc
 let g:ale_fixers = {
 \   '*': ['remove_trailing_lines', 'trim_whitespace'],
 \}
-"run fixers manually with :ALEFix (not on save, to avoid surprises)
+"run fixers manually with <leader>lf (not on save, to avoid surprises)
 
 "lint as you edit, but gently
 let g:ale_lint_on_text_changed = 'normal'
@@ -377,16 +374,23 @@ let g:ale_sign_warning = 'W>'
 let g:ale_hover_to_floating_preview = 1
 let g:ale_detail_to_floating_preview = 1
 
-"IDE navigation (LSP via ALE)
-nnoremap <leader>ld :ALEGoToDefinition<CR>
-nnoremap <leader>lr :ALEFindReferences<CR>
-nnoremap <leader>lh :ALEHover<CR>
-nnoremap <leader>lt :ALEGoToTypeDefinition<CR>
-nnoremap <leader>lf :ALEFix<CR>
-nnoremap <leader>ln :ALENextWrap<CR>
-nnoremap <leader>lp :ALEPreviousWrap<CR>
+"IDE shortcuts, all under <leader>l ("language"):
+"  l  toggle ALE on/off           h  hover info
+"  d  go to definition            t  go to type definition
+"  r  list references             R  rename symbol
+"  n  next problem                p  previous problem
+"  e  explain problem (full msg)  f  fix (trim whitespace etc.)
+nnoremap <silent> <leader>ll :ALEToggle<CR>:echo 'ALE ' . (g:ale_enabled ? 'on' : 'off')<CR>
+nnoremap <silent> <leader>lh :ALEHover<CR>
+nnoremap <silent> <leader>ld :ALEGoToDefinition<CR>
+nnoremap <silent> <leader>lt :ALEGoToTypeDefinition<CR>
+nnoremap <silent> <leader>lr :ALEFindReferences<CR>
+nnoremap <silent> <leader>lR :ALERename<CR>
+nnoremap <silent> <leader>ln :ALENextWrap<CR>
+nnoremap <silent> <leader>lp :ALEPreviousWrap<CR>
+nnoremap <silent> <leader>le :ALEDetail<CR>
+nnoremap <silent> <leader>lf :ALEFix<CR>
 "<C-x><C-o> = omni-complete (LSP-backed in c/cpp buffers)
-
 
 
 "llm completion mappings
@@ -395,5 +399,3 @@ let g:llm_complete_suffix_lines = 20
 let g:llm_complete_max_tokens = 128
 let g:llm_complete_debounce = 80
 let g:llm_complete_project_file = 'MODEL.md'
-
-

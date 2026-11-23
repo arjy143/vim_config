@@ -1,2 +1,4 @@
 *.un~
 .vim/plugged/
+.vim/.netrwhist
+.vscode
