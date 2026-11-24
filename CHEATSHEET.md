@@ -24,6 +24,7 @@ Mappings marked **(default)** come from a plugin; the rest are defined in `.vimr
 | `<F9>` / `<F10>` | Previous / next tab |
 | `<leader>t` | New tab |
 | `<C-/>` | Toggle comment on the line / selection |
+| `<leader>"` `'` `(` `[` `{` | Surround the word / selection with quotes or brackets |
 | `<leader>l…` | Language tools (ALE), see below |
 | `<leader>G` | Git status (fugitive) |
 | `<leader>u` | Undo history tree |
@@ -152,14 +153,18 @@ Gutter signs: `E>` = error, `W>` = warning. Wired for **C/C++** (clangd).
 ### auto-pairs
 Brackets and quotes close automatically; deleting an opening one deletes its match. **(automatic)**
 
-### vim-surround — surrounding pairs **(default)**
+### Surround — quotes & brackets
 | Key | Action |
 |---|---|
+| `<leader>"` / `<leader>'` | Wrap the word under the cursor (or the selection) in `""` / `''` |
+| `<leader>(` / `<leader>[` / `<leader>{` | Wrap the word (or the selection) in `()` / `[]` / `{}` |
 | `cs"'` | Change surrounding `"` to `'` |
 | `ds(` | Delete surrounding `()` |
 | `ysiw)` | Surround the word with `()` (use `(` for inner spaces) |
 | `yss)` | Surround the whole line |
 | `S)` | (visual mode) surround the selection |
+
+The `cs` / `ds` / `ys` / `S` keys come from vim-surround **(default)**.
 
 ### vim-unimpaired — paired bracket mappings **(default)**
 | Key | Action |

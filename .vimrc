@@ -222,6 +222,19 @@ xmap <C-_> <Plug>Commentary
 nmap <C-/> <Plug>CommentaryLine
 xmap <C-/> <Plug>Commentary
 
+"surround: <leader> + " ' ( [ { wraps the word under the cursor, or the selection.
+"(the closing character goes in first, so the start position doesn't shift.)
+nnoremap <leader>" viw<Esc>`>a"<Esc>`<i"<Esc>
+xnoremap <leader>" <Esc>`>a"<Esc>`<i"<Esc>
+nnoremap <leader>' viw<Esc>`>a'<Esc>`<i'<Esc>
+xnoremap <leader>' <Esc>`>a'<Esc>`<i'<Esc>
+nnoremap <leader>( viw<Esc>`>a)<Esc>`<i(<Esc>
+xnoremap <leader>( <Esc>`>a)<Esc>`<i(<Esc>
+nnoremap <leader>[ viw<Esc>`>a]<Esc>`<i[<Esc>
+xnoremap <leader>[ <Esc>`>a]<Esc>`<i[<Esc>
+nnoremap <leader>{ viw<Esc>`>a}<Esc>`<i{<Esc>
+xnoremap <leader>{ <Esc>`>a}<Esc>`<i{<Esc>
+
 "undotree: toggle the undo-history panel (focuses it so you can navigate)
 nnoremap <silent> <leader>u :UndotreeToggle<CR>:UndotreeFocus<CR>
 "(surround / repeat / unimpaired / abolish / eunuch work out of the box)
