@@ -28,6 +28,7 @@ Mappings marked **(default)** come from a plugin; the rest are defined in `.vimr
 | `<leader>l…` | Language tools (ALE), see below |
 | `<leader>G` | Git status (fugitive) |
 | `<leader>u` | Undo history tree |
+| `<leader>p` | Paste from the yank history (last 20 yanks) |
 | `<leader>m` | Markdown preview (markdown files only) |
 | `<leader>?` | This cheatsheet |
 
@@ -110,6 +111,8 @@ Mouse is enabled, so you can also click into a pane, drag borders and scroll.
 | `<leader>le` | Explain the problem under the cursor (full message) |
 | `<leader>lf` | Fix: trim trailing whitespace / blank lines |
 | `<C-o>` | Jump back after going to a definition (built in) |
+| `<Tab>` / `<S-Tab>` | Completion menu: move down / up through the suggestions |
+| `<CR>` | Completion menu: confirm the chosen suggestion (newline if none chosen) |
 | `<C-x><C-o>` | LSP completion (also pops up automatically as you type) |
 | `:ALEInfo` | Show ALE status / which linters ran |
 
@@ -166,14 +169,10 @@ Brackets and quotes close automatically; deleting an opening one deletes its mat
 
 The `cs` / `ds` / `ys` / `S` keys come from vim-surround **(default)**.
 
-### vim-unimpaired — paired bracket mappings **(default)**
+### Blank lines
 | Key | Action |
 |---|---|
-| `]q` / `[q` | Next / previous quickfix item |
-| `]b` / `[b` | Next / previous buffer |
-| `]e` / `[e` | Move the current line down / up |
-| `]<Space>` / `[<Space>` | Add a blank line below / above |
-| `yos` / `yow` | Toggle spell check / line wrap |
+| `[<Space>` / `]<Space>` | Add a blank line above / below, staying in normal mode (takes a count: `3]<Space>`) |
 
 ### vim-abolish — case tools **(default)**
 | Key / Command | Action |
@@ -183,6 +182,19 @@ The `cs` / `ds` / `ys` / `S` keys come from vim-surround **(default)**.
 
 ### vim-eunuch — file operations
 `:Rename <new>` · `:Move <path>` · `:Delete` · `:Mkdir` · `:SudoWrite` · `:Chmod <mode>`
+
+### Yank history
+Every yank (`y`, not `d`/`c`) is saved to `~/.vim_yank_history`, newest first,
+shared by all open Vims. Re-yanking something moves it back to the top.
+Yanks over 100 KB aren't saved (they still work as normal yanks), so the file
+never grows past about 2 MB.
+
+| Key | Action |
+|---|---|
+| `<leader>p` | Pop up the last 20 yanks |
+| `j` / `k`, `<CR>` | (in the popup) choose, then paste after the cursor |
+| `1`–`9` | (in the popup) paste that entry straight away |
+| `<Esc>` | (in the popup) cancel |
 
 ### Undo & repeat
 | Key | Action |

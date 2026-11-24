@@ -7,9 +7,8 @@ set nocompatible
 let s:vimdir = fnamemodify(resolve(expand('<sfile>:p')), ':h') . '/.vim'
 let &runtimepath = s:vimdir . ',' . &runtimepath . ',' . s:vimdir . '/after'
 let &packpath = s:vimdir . ',' . &packpath
-
-filetype plugin indent on
-syntax on
+"(filetype detection and syntax highlighting are switched on by plug#end() below;
+"turning them on here too would load them twice and slow down startup.)
 
 "no swap files (undo extension is good enough)
 set noswapfile
@@ -27,19 +26,14 @@ set mouse=a
 "code folding
 set foldmethod=marker
 
-"setting a nice colour scheme
-colorscheme koehler
-" if has("termguicolors")
-"     set termguicolors
-" endif
+"(the colour scheme is set just after plug#end() below, once syntax is on)
 
 "line numbers: absolute on the current line, relative everywhere else
 set number
 set relativenumber
 
-"set the current line to be highlighted
+"highlight the current line (its colour is set with the colour scheme below)
 set cursorline
-highlight cursorline cterm=NONE ctermbg=236 guibg=#2a2e36
 set t_Co=256
 
 "keep context when scrolling
@@ -64,6 +58,26 @@ set smartcase
 if has('persistent_undo')
 	set undofile
 endif
+
+"large files (over 10 MB, e.g. logs): skip the things that scan the whole file,
+"so they open and save quickly: marker folding, the persistent undo file and ALE.
+"(foldmethod belongs to the window, so it's switched back when another buffer is
+"shown in that window; undofile and ale_enabled belong to the buffer.)
+function! s:LargeFileFolds() abort
+	if get(b:, 'large_file', 0)
+		setlocal foldmethod=manual
+		let w:large_file_folds = 1
+	elseif get(w:, 'large_file_folds', 0)
+		let &l:foldmethod = &g:foldmethod
+		unlet w:large_file_folds
+	endif
+endfunction
+augroup LargeFile
+	autocmd!
+	autocmd BufReadPre * if getfsize(expand('<afile>')) > 10 * 1024 * 1024
+		\ | let b:large_file = 1 | setlocal foldmethod=manual noundofile | let b:ale_enabled = 0 | endif
+	autocmd BufWinEnter * call s:LargeFileFolds()
+augroup END
 
 "open the cheatsheet from anywhere with <leader>? (read-only, in a new tab).
 "path is derived from this vimrc's real location, so it survives moving the repo.
@@ -123,6 +137,88 @@ augroup NetrwMaps
 	autocmd FileType netrw nnoremap <buffer> <C-l> <C-w>l
 augroup END
 
+"--------------------------------YANK HISTORY-------------------------------
+"every yank is saved (newest first) to ~/.vim_yank_history as JSON, shared by
+"all vim instances. <leader>p pops up the last 20: j/k to move, <CR> or 1-9 to
+"paste after the cursor, <Esc> to cancel.
+"size limit: yanks bigger than s:yank_max_bytes (as stored) aren't saved, so the
+"file never exceeds s:yank_max * s:yank_max_bytes (2 MB).
+let s:yank_file = expand('~/.vim_yank_history')
+let s:yank_max = 20
+let s:yank_max_bytes = 100 * 1024
+
+function! s:YankHistoryRead() abort
+	"a missing file, or one far too big to have been written by us, starts afresh
+	if !filereadable(s:yank_file) || getfsize(s:yank_file) > 2 * s:yank_max * s:yank_max_bytes
+		return []
+	endif
+	try
+		let l:history = json_decode(join(readfile(s:yank_file), ''))
+		return type(l:history) == v:t_list ? l:history : []
+	catch
+		return []    "corrupt file: start again
+	endtry
+endfunction
+
+function! s:YankHistorySave(event) abort
+	if a:event.operator !=# 'y' || join(a:event.regcontents, '') =~# '^\s*$'
+		return
+	endif
+	let entry = {'text': a:event.regcontents, 'type': a:event.regtype}
+	if strlen(json_encode(entry)) > s:yank_max_bytes
+		echo 'Yank too big for the yank history (over 100 KB), not saved'
+		return
+	endif
+	"newest first, and no duplicates (re-yanking something moves it to the top)
+	let history = [entry] + filter(s:YankHistoryRead(), {_, old -> old != entry})
+	call writefile([json_encode(history[: s:yank_max - 1])], s:yank_file)
+	call setfperm(s:yank_file, 'rw-------')    "yanks can contain secrets
+endfunction
+
+"one-line preview of an entry: lines joined with ⏎, whitespace squashed
+function! s:YankPreview(index, entry) abort
+	let l:text = substitute(trim(join(a:entry.text, ' ⏎ ')), '\s\+', ' ', 'g')
+	let l:text = strchars(l:text) > 70 ? strcharpart(l:text, 0, 69) . '…' : l:text
+	return printf('%2d  %s', a:index + 1, l:text)
+endfunction
+
+"the popup's keys: digits pick an entry directly, everything else is the default menu
+function! s:YankHistoryFilter(id, key) abort
+	if a:key =~# '^[1-9]$'
+		call popup_close(a:id, str2nr(a:key))
+		return 1
+	endif
+	return popup_filter_menu(a:id, a:key)
+endfunction
+
+function! s:YankHistoryPut(history, choice) abort
+	if a:choice < 1 || a:choice > len(a:history)
+		return    "cancelled
+	endif
+	let l:entry = a:history[a:choice - 1]
+	call setreg('"', l:entry.text, l:entry.type)
+	normal! ""p
+endfunction
+
+function! s:YankHistoryPaste() abort
+	let history = s:YankHistoryRead()
+	if empty(history)
+		echo 'Yank history is empty'
+		return
+	endif
+	call popup_menu(map(copy(history), function('s:YankPreview')), {
+	\   'title': ' Yank history ',
+	\   'filter': function('s:YankHistoryFilter'),
+	\   'callback': {_, choice -> s:YankHistoryPut(history, choice)},
+	\ })
+endfunction
+
+augroup YankHistory
+	autocmd!
+	autocmd TextYankPost * call s:YankHistorySave(v:event)
+augroup END
+nnoremap <silent> <leader>p :call <SID>YankHistoryPaste()<CR>
+
 "--------------------------------PLUGINS-------------------------------
 "ALE: these must be set before ALE loads (full config is further below).
 "Turn on LSP-driven autocompletion and auto-import.
@@ -158,8 +254,6 @@ Plug 'tpope/vim-commentary'
 Plug 'tpope/vim-surround'
 "make plugin actions (surround, commentary, ...) repeatable with .
 Plug 'tpope/vim-repeat'
-"paired bracket mappings: ]q [q quickfix, ]b [b buffers, yos spell, ...
-Plug 'tpope/vim-unimpaired'
 "case-preserving search/replace + crs crc cru case coercion
 Plug 'tpope/vim-abolish'
 "file ops from inside vim: :Rename :Delete :Move :SudoWrite :Mkdir
@@ -177,9 +271,17 @@ endif
 
 "markdown in-editor rendering (pure vimscript, no external deps)
 "(tabular is an optional helper for :TableFormat alignment)
-Plug 'godlygeek/tabular'
+Plug 'godlygeek/tabular', { 'for': 'markdown' }    "only loaded for markdown files
 Plug 'preservim/vim-markdown'
 call plug#end()
+
+"colour scheme: set after plug#end(), because plug#end() turns syntax on and that
+"would otherwise reset the custom highlight below.
+colorscheme koehler
+" if has("termguicolors")
+"     set termguicolors
+" endif
+highlight cursorline cterm=NONE ctermbg=236 guibg=#2a2e36
 
 
 "--------------------------------PLUGIN CONFIGS-------------------------------
@@ -237,7 +339,12 @@ xnoremap <leader>{ <Esc>`>a}<Esc>`<i{<Esc>
 
 "undotree: toggle the undo-history panel (focuses it so you can navigate)
 nnoremap <silent> <leader>u :UndotreeToggle<CR>:UndotreeFocus<CR>
-"(surround / repeat / unimpaired / abolish / eunuch work out of the box)
+"(surround / repeat / abolish / eunuch work out of the box)
+
+"blank lines: [<Space> / ]<Space> add one above / below without leaving normal
+"mode, and the cursor stays on its line. Takes a count: 3]<Space> adds three.
+nnoremap <silent> [<Space> :<C-u>call append(line('.') - 1, repeat([''], v:count1))<CR>
+nnoremap <silent> ]<Space> :<C-u>call append(line('.'), repeat([''], v:count1))<CR>
 
 "wsl copy paste: the plugin provides `cy` (operator) and `Y` (visual) to copy
 "to the Windows clipboard, and `cp` to paste. No custom mapping needed.
@@ -374,9 +481,12 @@ let g:ale_fixers = {
 \}
 "run fixers manually with <leader>lf (not on save, to avoid surprises)
 
-"lint as you edit, but gently
+"lint as you edit, but gently: after changes in normal mode, which includes
+"leaving insert mode. (lint_on_insert_leave is off because ALE detects it with
+"ModeChanged, which also fires on every auto-pairs bracket/quote/space and on the
+"completion menu, so it re-linted on nearly every keystroke.)
 let g:ale_lint_on_text_changed = 'normal'
-let g:ale_lint_on_insert_leave = 1
+let g:ale_lint_on_insert_leave = 0
 let g:ale_lint_delay = 300
 
 "gutter: keep the sign column open so text doesn't jump around
@@ -404,6 +514,14 @@ nnoremap <silent> <leader>lp :ALEPreviousWrap<CR>
 nnoremap <silent> <leader>le :ALEDetail<CR>
 nnoremap <silent> <leader>lf :ALEFix<CR>
 "<C-x><C-o> = omni-complete (LSP-backed in c/cpp buffers)
+
+"completion menu: <Tab> / <S-Tab> move down / up through the suggestions (filling
+"each one in), <CR> confirms the chosen one. <CR> with nothing chosen is a normal
+"newline, and with no menu open both keys behave as usual.
+"(auto-pairs wraps this <CR> mapping, so <CR> between brackets still indents.)
+inoremap <expr> <Tab> pumvisible() ? "\<C-n>" : "\<Tab>"
+inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>" : "\<S-Tab>"
+inoremap <expr> <CR> pumvisible() ? (complete_info(['selected']).selected >= 0 ? "\<C-y>" : "\<C-e>\<CR>") : "\<CR>"
 
 
 "llm completion mappings
