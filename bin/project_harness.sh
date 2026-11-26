@@ -15,13 +15,13 @@ project(${project_name} LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Every .cpp under src/ is compiled; CONFIGURE_DEPENDS picks up new files on the next build.
+# CONFIGURE_DEPENDS picks up new files without re-running cmake
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 add_executable(${project_name} \${SOURCES})
 target_include_directories(${project_name} PRIVATE include)
 target_compile_options(${project_name} PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion)
 
-# Debug builds: catch memory errors and undefined behaviour at runtime.
+# sanitizers in debug builds
 if(CMAKE_BUILD_TYPE STREQUAL Debug)
     set(SANITIZERS -fsanitize=address,undefined -fno-sanitize-recover=all)
     target_compile_options(${project_name} PRIVATE -g3 -fno-omit-frame-pointer \${SANITIZERS})
@@ -61,7 +61,7 @@ DEBUG_CONTENT="#!/usr/bin/env bash
 set -e
 cd \"\$(dirname \"\$0\")\"
 ./build.sh debug
-# LeakSanitizer can't run under gdb; abort_on_error makes gdb stop on sanitizer errors.
+# LeakSanitizer doesn't work under gdb; abort_on_error stops at sanitizer errors
 export ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 UBSAN_OPTIONS=abort_on_error=1
 gdb -q -ex run --args ./build/debug/${project_name} \"\$@\""
 
@@ -87,7 +87,7 @@ core.[0-9]*
 .vscode/
 .idea/"
 
-# write_file FILE CONTENT: create FILE with CONTENT, unless it already exists.
+# write_file FILE CONTENT: create FILE unless it exists
 write_file() {
     if [[ -e $1 ]]; then
         echo "skipped $1 (already exists)"

@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-# install_dependencies.sh - set up this vim config on a new machine.
+# install_dependencies.sh - set up this config on a new machine.
 #
 # Usage: ./install_dependencies.sh [-y]
-#   -y, --yes   don't ask before installing packages
+#   -y, --yes   install packages without asking
 #
-# 1. installs the tools the config uses (clangd, ripgrep, glow, ...)
-#    with apt (Debian/Ubuntu/WSL), dnf (Fedora) or pacman (Arch)
-# 2. links ~/.vimrc to this repo (backing up an existing one)
-# 3. installs the vim plugins (:PlugInstall)
-# 4. puts bin/project_harness.sh on your PATH via ~/.local/bin
+# 1. installs dependencies with apt, dnf or pacman
+# 2. links ~/.vimrc to this repo (an existing one is backed up)
+# 3. runs :PlugInstall
+# 4. links bin/project_harness.sh into ~/.local/bin
 set -euo pipefail
 
 repo="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -16,26 +15,25 @@ assume_yes=0
 for arg in "$@"; do
     case $arg in
         -y | --yes) assume_yes=1 ;;
-        -h | --help) sed -n '2,11s/^# \{0,1\}//p' "$0"; exit 0 ;;
+        -h | --help) sed -n '2,10s/^# \{0,1\}//p' "$0"; exit 0 ;;
         *) echo "unknown option: $arg (see --help)" >&2; exit 2 ;;
     esac
 done
 
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*"; }
-# run CMD...: print a command, then run it
+# print and run a command
 run() { printf '  $ %s\n' "$*"; "$@"; }
 
 sudo=""
 ((EUID == 0)) || sudo=sudo
 
 # ---- 1. system packages --------------------------------------------------------
-# what each package is for:
-#   vim git curl          the editor itself, and downloading plugins
-#   clangd clang-format   C/C++ language server + formatter (ALE, <leader>l...)
-#   ripgrep               <leader>/ project-wide search
-#   glow                  <leader>m markdown preview
-#   cmake g++ gdb         building and debugging project_harness.sh projects
+#   vim git curl          editor, plugin downloads
+#   clangd clang-format   C/C++ language server and formatter (ALE)
+#   ripgrep               :Rg search
+#   glow                  markdown preview
+#   cmake g++ gdb         project_harness.sh projects
 step "System packages"
 if command -v apt-get >/dev/null; then
     packages=(vim git curl clangd clang-format ripgrep glow cmake g++ gdb)
@@ -80,11 +78,10 @@ else
     install "${to_install[@]}"
 fi
 
-# glow isn't packaged on every distro (e.g. older Ubuntu); fall back to the
-# official release binary in ~/.local/bin.
+# glow is not packaged everywhere; fall back to the release binary
 for pkg in "${unavailable[@]}"; do
     if [[ $pkg == glow ]] && command -v glow >/dev/null; then
-        continue    # already installed some other way
+        continue
     elif [[ $pkg == glow ]]; then
         case $(uname -m) in
             x86_64) arch=x86_64 ;;

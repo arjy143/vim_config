@@ -1,19 +1,16 @@
 "init stuff
 set nocompatible
 
-"use this repo's .vim directory for plugins (plug.vim, plugged/, pack/).
-"~/.vimrc is a symlink into the repo, so resolve it to find the real location;
-"that way nothing else needs linking and the repo can live anywhere.
+"load plugins from the repo's .vim dir (~/.vimrc is a symlink into the repo)
 let s:vimdir = fnamemodify(resolve(expand('<sfile>:p')), ':h') . '/.vim'
 let &runtimepath = s:vimdir . ',' . &runtimepath . ',' . s:vimdir . '/after'
 let &packpath = s:vimdir . ',' . &packpath
-"(filetype detection and syntax highlighting are switched on by plug#end() below;
-"turning them on here too would load them twice and slow down startup.)
+"filetype and syntax are enabled by plug#end()
 
 "no swap files (undo extension is good enough)
 set noswapfile
 
-"leader key: space. (Nop stops a lone space from also moving the cursor.)
+"leader key
 let mapleader = " "
 nnoremap <Space> <Nop>
 
@@ -26,13 +23,11 @@ set mouse=a
 "code folding
 set foldmethod=marker
 
-"(the colour scheme is set just after plug#end() below, once syntax is on)
-
-"line numbers: absolute on the current line, relative everywhere else
+"line numbers
 set number
 set relativenumber
 
-"highlight the current line (its colour is set with the colour scheme below)
+"highlight the current line
 set cursorline
 set t_Co=256
 
@@ -59,10 +54,8 @@ if has('persistent_undo')
 	set undofile
 endif
 
-"large files (over 10 MB, e.g. logs): skip the things that scan the whole file,
-"so they open and save quickly: marker folding, the persistent undo file and ALE.
-"(foldmethod belongs to the window, so it's switched back when another buffer is
-"shown in that window; undofile and ale_enabled belong to the buffer.)
+"files over 10 MB: no marker folding, undo file or ALE
+"foldmethod is window-local, so restore it when another buffer enters the window
 function! s:LargeFileFolds() abort
 	if get(b:, 'large_file', 0)
 		setlocal foldmethod=manual
@@ -79,8 +72,7 @@ augroup LargeFile
 	autocmd BufWinEnter * call s:LargeFileFolds()
 augroup END
 
-"open the cheatsheet from anywhere with <leader>? (read-only, in a new tab).
-"path is derived from this vimrc's real location, so it survives moving the repo.
+"<leader>? opens the cheatsheet, read-only, in a new tab
 let s:cheatsheet = fnamemodify(resolve(expand('<sfile>:p')), ':h') . '/CHEATSHEET.md'
 function! s:OpenCheatsheet() abort
 	if filereadable(s:cheatsheet)
@@ -93,22 +85,20 @@ endfunction
 nnoremap <silent> <leader>? :call <SID>OpenCheatsheet()<CR>
 
 "--------------------------------WINDOWS & TABS-------------------------------
-"move between panes with ctrl + h/j/k/l
+"pane navigation
 nnoremap <C-h> <C-w>h
 nnoremap <C-j> <C-w>j
 nnoremap <C-k> <C-w>k
 nnoremap <C-l> <C-w>l
 
-"tabs: F9 / F10 = previous / next, <leader>t = new tab
+"tabs
 nnoremap <silent> <F9> :tabprevious<CR>
 nnoremap <silent> <F10> :tabnext<CR>
 inoremap <silent> <F9> <Esc>:tabprevious<CR>
 inoremap <silent> <F10> <Esc>:tabnext<CR>
 nnoremap <silent> <leader>t :tabnew<CR>
 
-"<leader>z: zoom the current pane to full screen, press again to restore.
-"(zooming opens the pane in its own tab; un-zooming closes that tab and goes
-"back to the original one.)
+"zoom: show the current pane in its own tab, close it to restore
 function! s:ZoomToggle() abort
 	if exists('t:zoom_origin')
 		let l:origin = t:zoom_origin
@@ -123,32 +113,27 @@ endfunction
 nnoremap <silent> <leader>z :call <SID>ZoomToggle()<CR>
 
 "--------------------------------FILE TREE (netrw, built in)-------------------------------
-"ctrl + t toggles a file tree on the left. Inside it: <CR> open, - parent dir,
-"% new file, d new dir, D delete, R rename, gh toggle hidden files.
-let g:netrw_banner = 0          "hide the help banner (press I to show it)
+let g:netrw_banner = 0
 let g:netrw_liststyle = 3       "tree view
-let g:netrw_winsize = 20        "width, in percent
-let g:netrw_browse_split = 4    "open files in the window you came from
+let g:netrw_winsize = 20        "width (%)
+let g:netrw_browse_split = 4    "open files in the previous window
 nnoremap <silent> <C-t> :Lexplore<CR>
-"netrw uses ctrl + l for refresh; make it move to the pane on the right instead,
-"like everywhere else (toggle the tree with ctrl + t twice to refresh it).
+"netrw maps ctrl-l to refresh; keep it for pane navigation
 augroup NetrwMaps
 	autocmd!
 	autocmd FileType netrw nnoremap <buffer> <C-l> <C-w>l
 augroup END
 
 "--------------------------------YANK HISTORY-------------------------------
-"every yank is saved (newest first) to ~/.vim_yank_history as JSON, shared by
-"all vim instances. <leader>p pops up the last 20: j/k to move, <CR> or 1-9 to
-"paste after the cursor, <Esc> to cancel.
-"size limit: yanks bigger than s:yank_max_bytes (as stored) aren't saved, so the
-"file never exceeds s:yank_max * s:yank_max_bytes (2 MB).
+"yanks are stored newest first in ~/.vim_yank_history (JSON, shared between
+"instances). <leader>p opens a picker: j/k and <CR>, or 1-9. <Esc> cancels.
+"yanks larger than s:yank_max_bytes are skipped, capping the file at ~2 MB.
 let s:yank_file = expand('~/.vim_yank_history')
 let s:yank_max = 20
 let s:yank_max_bytes = 100 * 1024
 
 function! s:YankHistoryRead() abort
-	"a missing file, or one far too big to have been written by us, starts afresh
+	"ignore a missing or oversized file
 	if !filereadable(s:yank_file) || getfsize(s:yank_file) > 2 * s:yank_max * s:yank_max_bytes
 		return []
 	endif
@@ -156,7 +141,7 @@ function! s:YankHistoryRead() abort
 		let l:history = json_decode(join(readfile(s:yank_file), ''))
 		return type(l:history) == v:t_list ? l:history : []
 	catch
-		return []    "corrupt file: start again
+		return []    "invalid JSON
 	endtry
 endfunction
 
@@ -169,20 +154,20 @@ function! s:YankHistorySave(event) abort
 		echo 'Yank too big for the yank history (over 100 KB), not saved'
 		return
 	endif
-	"newest first, and no duplicates (re-yanking something moves it to the top)
+	"a repeated yank moves to the top
 	let history = [entry] + filter(s:YankHistoryRead(), {_, old -> old != entry})
 	call writefile([json_encode(history[: s:yank_max - 1])], s:yank_file)
-	call setfperm(s:yank_file, 'rw-------')    "yanks can contain secrets
+	call setfperm(s:yank_file, 'rw-------')
 endfunction
 
-"one-line preview of an entry: lines joined with ⏎, whitespace squashed
+"one line per entry, truncated to 70 characters
 function! s:YankPreview(index, entry) abort
 	let l:text = substitute(trim(join(a:entry.text, ' ⏎ ')), '\s\+', ' ', 'g')
 	let l:text = strchars(l:text) > 70 ? strcharpart(l:text, 0, 69) . '…' : l:text
 	return printf('%2d  %s', a:index + 1, l:text)
 endfunction
 
-"the popup's keys: digits pick an entry directly, everything else is the default menu
+"1-9 select directly; other keys go to the default menu filter
 function! s:YankHistoryFilter(id, key) abort
 	if a:key =~# '^[1-9]$'
 		call popup_close(a:id, str2nr(a:key))
@@ -193,7 +178,7 @@ endfunction
 
 function! s:YankHistoryPut(history, choice) abort
 	if a:choice < 1 || a:choice > len(a:history)
-		return    "cancelled
+		return
 	endif
 	let l:entry = a:history[a:choice - 1]
 	call setreg('"', l:entry.text, l:entry.type)
@@ -220,19 +205,17 @@ augroup END
 nnoremap <silent> <leader>p :call <SID>YankHistoryPaste()<CR>
 
 "--------------------------------PLUGINS-------------------------------
-"ALE: these must be set before ALE loads (full config is further below).
-"Turn on LSP-driven autocompletion and auto-import.
+"ALE options that must be set before it loads
 let g:ale_completion_enabled = 1
 let g:ale_completion_autoimport = 1
 
-"plugins are installed into <repo>/.vim/plugged (git-ignored; run :PlugInstall)
+"installed into .vim/plugged (git-ignored)
 call plug#begin(s:vimdir . '/plugged')
 
 "status line
 Plug 'itchyny/lightline.vim'
 
-"fuzzy finding
-"(the hook downloads the fzf binary into the plugin dir, so no system fzf is needed)
+"fuzzy finding (the hook installs the fzf binary)
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
 
@@ -249,34 +232,31 @@ Plug 'mg979/vim-visual-multi'
 "vim comments
 Plug 'tpope/vim-commentary'
 
-"--- tier 1 essentials (pure vimscript, no external deps) ---
-"surround text objects: cs\"' ds( ysiw)
+"surround: cs, ds, ys
 Plug 'tpope/vim-surround'
-"make plugin actions (surround, commentary, ...) repeatable with .
+"repeat plugin maps with .
 Plug 'tpope/vim-repeat'
-"case-preserving search/replace + crs crc cru case coercion
+"case-preserving substitution, case coercion
 Plug 'tpope/vim-abolish'
-"file ops from inside vim: :Rename :Delete :Move :SudoWrite :Mkdir
+":Rename, :Move, :Delete, :Mkdir, :SudoWrite
 Plug 'tpope/vim-eunuch'
-"visualise the persistent undo tree
+"undo tree
 Plug 'mbbill/undotree'
 
-"Linter / LSP client
+"linter / LSP client
 Plug 'dense-analysis/ale'
 
-"copy/paste to the Windows clipboard (only useful, and only loaded, under WSL)
+"windows clipboard (WSL only)
 if has('wsl')
 	Plug 'Konfekt/vim-wsl-copy-paste'
 endif
 
-"markdown in-editor rendering (pure vimscript, no external deps)
-"(tabular is an optional helper for :TableFormat alignment)
-Plug 'godlygeek/tabular', { 'for': 'markdown' }    "only loaded for markdown files
+"markdown (tabular is only used by :TableFormat)
+Plug 'godlygeek/tabular', { 'for': 'markdown' }
 Plug 'preservim/vim-markdown'
 call plug#end()
 
-"colour scheme: set after plug#end(), because plug#end() turns syntax on and that
-"would otherwise reset the custom highlight below.
+"colour scheme: after plug#end(), which enables syntax and would reset highlights
 colorscheme koehler
 " if has("termguicolors")
 "     set termguicolors
@@ -286,15 +266,7 @@ highlight cursorline cterm=NONE ctermbg=236 guibg=#2a2e36
 
 "--------------------------------PLUGIN CONFIGS-------------------------------
 
-"status line (lightline): default layout, no configuration needed
-
-"fuzzy finder (fzf)
-"<leader>f  find a file and open it here
-"<leader>g  ... in a new tab
-"<leader>v  ... in a vertical split
-"<leader>s  ... in a horizontal split
-"<leader>b  switch between open buffers
-"<leader>/  search the contents of every file in the project (ripgrep)
+"fzf: <leader>f open, g new tab, v vsplit, s split; b buffers; / ripgrep
 function! s:FzfFiles(open_cmd) abort
 	call fzf#vim#files('', fzf#vim#with_preview({'sink': a:open_cmd}))
 endfunction
@@ -305,27 +277,20 @@ nnoremap <silent> <leader>s :call <SID>FzfFiles('split')<CR>
 nnoremap <silent> <leader>b :Buffers<CR>
 nnoremap <silent> <leader>/ :Rg<CR>
 
-"git
-"<leader>G opens the fugitive status window (s stage, u unstage, = diff, cc commit).
-"gitgutter's own defaults: ]c / [c next/previous change, <leader>hp preview hunk,
-"<leader>hs stage hunk, <leader>hu undo hunk.
+"git: fugitive status. gitgutter defaults: ]c [c, <leader>hp/hs/hu
 nnoremap <silent> <leader>G :Git<CR>
 
-"multiple cursors (vim-visual-multi defaults, like vscode):
-"ctrl + n select word / add next match, ctrl + down/up add a cursor below/above,
-"<leader>a select every match of the word under the cursor.
+"multiple cursors: ctrl-n, ctrl-up/down (defaults); <leader>a selects all
 let g:VM_maps = {}
 let g:VM_maps['Select All'] = '<leader>a'
 
-"comments: ctrl + / toggles the current line, or the selection.
-"(most terminals send ctrl + / as ctrl + _, so map both.)
+"comments: ctrl-/ (most terminals send it as ctrl-_)
 nmap <C-_> <Plug>CommentaryLine
 xmap <C-_> <Plug>Commentary
 nmap <C-/> <Plug>CommentaryLine
 xmap <C-/> <Plug>Commentary
 
-"surround: <leader> + " ' ( [ { wraps the word under the cursor, or the selection.
-"(the closing character goes in first, so the start position doesn't shift.)
+"surround the word or selection; the closing character goes in first
 nnoremap <leader>" viw<Esc>`>a"<Esc>`<i"<Esc>
 xnoremap <leader>" <Esc>`>a"<Esc>`<i"<Esc>
 nnoremap <leader>' viw<Esc>`>a'<Esc>`<i'<Esc>
@@ -337,44 +302,29 @@ xnoremap <leader>[ <Esc>`>a]<Esc>`<i[<Esc>
 nnoremap <leader>{ viw<Esc>`>a}<Esc>`<i{<Esc>
 xnoremap <leader>{ <Esc>`>a}<Esc>`<i{<Esc>
 
-"undotree: toggle the undo-history panel (focuses it so you can navigate)
+"undo tree
 nnoremap <silent> <leader>u :UndotreeToggle<CR>:UndotreeFocus<CR>
-"(surround / repeat / abolish / eunuch work out of the box)
 
-"blank lines: [<Space> / ]<Space> add one above / below without leaving normal
-"mode, and the cursor stays on its line. Takes a count: 3]<Space> adds three.
+"blank line above / below, with optional count
 nnoremap <silent> [<Space> :<C-u>call append(line('.') - 1, repeat([''], v:count1))<CR>
 nnoremap <silent> ]<Space> :<C-u>call append(line('.'), repeat([''], v:count1))<CR>
 
-"wsl copy paste: the plugin provides `cy` (operator) and `Y` (visual) to copy
-"to the Windows clipboard, and `cp` to paste. No custom mapping needed.
+"wsl-copy-paste: cy{motion} and visual Y copy, cp pastes
 
-"markdown (markdown buffers only)
-"<leader>m  toggle a rendered preview (glow) in a split on the right
-"<leader>M  toggle inline rendering of the markup in the file itself
-"conceal raw markup so **bold**, _italics_, [links](url) etc. render inline.
-"markup on the line under the cursor stays visible so editing is easy.
+"markdown: <leader>m glow preview, <leader>M toggle concealment
 let g:vim_markdown_conceal = 1
-"keep fenced code blocks (```) shown as-is rather than concealing the fences
 let g:vim_markdown_conceal_code_blocks = 0
-"don't auto-collapse the whole document into folds when a file opens
 let g:vim_markdown_folding_disabled = 1
-"conceallevel 2 = hide concealed text entirely; only active in markdown buffers
 autocmd FileType markdown setlocal conceallevel=2
-"toggle the inline rendering on/off (handy while writing raw markup)
 function! s:ToggleMarkdownConceal() abort
 	let &l:conceallevel = &conceallevel == 0 ? 2 : 0
 	echo "conceallevel=" . &conceallevel
 endfunction
-"(provided by vim-markdown when concealment is on)
-" :Toc        - open a table of contents in a split
-" :TableFormat - align the current markdown table (uses tabular)
 
-"--- side-by-side rendered preview (glow in a terminal split) ---
-"the preview also auto-refreshes whenever you save the markdown file.
+"glow preview in a terminal split, refreshed on save
 let s:md_preview_buf = -1
 
-"window id of the live preview, or -1 if it isn't open
+"preview window id, or -1
 function! s:MdPreviewWinId() abort
 	if s:md_preview_buf != -1 && bufexists(s:md_preview_buf)
 		return bufwinid(s:md_preview_buf)
@@ -382,16 +332,13 @@ function! s:MdPreviewWinId() abort
 	return -1
 endfunction
 
-"render the given file with glow in a fresh vertical split on the right
 function! s:MdRenderInNewSplit(file) abort
 	rightbelow vertical new
-	"the new buffer is empty/unmodified, so ++curwin is safe here
 	execute 'terminal ++curwin ++noclose glow ' . fnameescape(a:file)
 	let s:md_preview_buf = bufnr('%')
 	setlocal nonumber norelativenumber nocursorline nobuflisted nospell
 endfunction
 
-"close the preview window/buffer if it exists
 function! s:MdPreviewClose() abort
 	let l:win = s:MdPreviewWinId()
 	if l:win != -1
@@ -404,8 +351,7 @@ function! s:MdPreviewClose() abort
 	let s:md_preview_buf = -1
 endfunction
 
-"(re)build the preview for the current buffer; never writes, so it's safe
-"to call from BufWritePost without recursing
+"doesn't write, so it's safe to call from BufWritePost
 function! s:MdPreviewShow() abort
 	let l:file = expand('%:p')
 	let l:srcwin = win_getid()
@@ -414,7 +360,6 @@ function! s:MdPreviewShow() abort
 	call win_gotoid(l:srcwin)
 endfunction
 
-"save, show the preview, and keep it fresh on save
 function! s:MdPreviewOpen() abort
 	if &filetype !=# 'markdown'
 		echohl WarningMsg | echo 'Not a markdown buffer' | echohl None | return
@@ -433,7 +378,6 @@ function! s:MdPreviewOpen() abort
 	augroup END
 endfunction
 
-"entry point for <leader>m: open the preview, or close it if it's already open
 function! s:MdPreviewToggle() abort
 	if s:MdPreviewWinId() != -1
 		call s:MdPreviewClose()
@@ -452,57 +396,42 @@ augroup MarkdownMaps
 augroup END
 
 "--------------------------------ALE (linter + LSP client)-------------------------------
-"clangd is the C/C++ language server: diagnostics, completion, go-to-def, hover.
 let g:ale_linters = {
 \   'c':   ['clangd'],
 \   'cpp': ['clangd'],
 \}
-"only run the linters listed above; don't auto-enable every linter ALE knows
 let g:ale_linters_explicit = 1
 
-"clangd options:
-" --background-index : index the whole project so symbols/types from other
-"                      headers resolve and cross-file references work.
-" --clang-tidy       : surface clang-tidy lint warnings inline.
-" --header-insertion=never : don't auto-add #include lines on completion.
-" (clangd still needs a compilation database -- compile_commands.json -- in the
-"  project; for CMake: cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON, see notes.)
+"clangd needs a compile_commands.json in the project
 let g:ale_c_clangd_options = '--background-index --clang-tidy --header-insertion=never'
 let g:ale_cpp_clangd_options = '--background-index --clang-tidy --header-insertion=never'
 
-"feed ALE's LSP completions into omni-complete too (<C-x><C-o>).
-"must be per-filetype: Vim's built-in c/cpp ftplugin otherwise forces ccomplete.
+"LSP completion for <C-x><C-o> (the c/cpp ftplugins would set ccomplete)
 autocmd FileType c,cpp setlocal omnifunc=ale#completion#OmniFunc
 
-"fixers: these two are built into ALE and need no external tool.
-"(add 'clang-format' for c/cpp once it's installed.)
+"fixers run manually with <leader>lf
 let g:ale_fixers = {
 \   '*': ['remove_trailing_lines', 'trim_whitespace'],
 \}
-"run fixers manually with <leader>lf (not on save, to avoid surprises)
 
-"lint as you edit, but gently: after changes in normal mode, which includes
-"leaving insert mode. (lint_on_insert_leave is off because ALE detects it with
-"ModeChanged, which also fires on every auto-pairs bracket/quote/space and on the
-"completion menu, so it re-linted on nearly every keystroke.)
+"lint after normal-mode changes. lint_on_insert_leave is off: ALE implements it
+"with ModeChanged, which auto-pairs and the completion menu trigger constantly.
 let g:ale_lint_on_text_changed = 'normal'
 let g:ale_lint_on_insert_leave = 0
 let g:ale_lint_delay = 300
 
-"gutter: keep the sign column open so text doesn't jump around
 let g:ale_sign_column_always = 1
 let g:ale_sign_error = 'E>'
 let g:ale_sign_warning = 'W>'
-"show the current line's message in a floating popup
 let g:ale_hover_to_floating_preview = 1
 let g:ale_detail_to_floating_preview = 1
 
-"IDE shortcuts, all under <leader>l ("language"):
-"  l  toggle ALE on/off           h  hover info
-"  d  go to definition            t  go to type definition
-"  r  list references             R  rename symbol
-"  n  next problem                p  previous problem
-"  e  explain problem (full msg)  f  fix (trim whitespace etc.)
+"<leader>l:
+"  l  toggle ALE           h  hover
+"  d  definition           t  type definition
+"  r  references           R  rename
+"  n  next problem         p  previous problem
+"  e  problem detail       f  fix
 nnoremap <silent> <leader>ll :ALEToggle<CR>:echo 'ALE ' . (g:ale_enabled ? 'on' : 'off')<CR>
 nnoremap <silent> <leader>lh :ALEHover<CR>
 nnoremap <silent> <leader>ld :ALEGoToDefinition<CR>
@@ -513,12 +442,9 @@ nnoremap <silent> <leader>ln :ALENextWrap<CR>
 nnoremap <silent> <leader>lp :ALEPreviousWrap<CR>
 nnoremap <silent> <leader>le :ALEDetail<CR>
 nnoremap <silent> <leader>lf :ALEFix<CR>
-"<C-x><C-o> = omni-complete (LSP-backed in c/cpp buffers)
 
-"completion menu: <Tab> / <S-Tab> move down / up through the suggestions (filling
-"each one in), <CR> confirms the chosen one. <CR> with nothing chosen is a normal
-"newline, and with no menu open both keys behave as usual.
-"(auto-pairs wraps this <CR> mapping, so <CR> between brackets still indents.)
+"completion menu: <Tab>/<S-Tab> cycle, <CR> accepts (newline if nothing selected).
+"auto-pairs wraps this <CR> mapping.
 inoremap <expr> <Tab> pumvisible() ? "\<C-n>" : "\<Tab>"
 inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>" : "\<S-Tab>"
 inoremap <expr> <CR> pumvisible() ? (complete_info(['selected']).selected >= 0 ? "\<C-y>" : "\<C-e>\<CR>") : "\<CR>"
